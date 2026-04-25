@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>재고조사</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f5f5f0; color: #1a1a1a; font-size: 15px; }
+
+header {
+  background: #1a1a1a;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+header h1 { color: #f0a500; font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.header-btns { display: flex; gap: 8px; }
+
+.btn {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: opacity 0.1s, transform 0.1s;
+}
+.btn:active { opacity: 0.8; transform: scale(0.97); }
+.btn-amber { background: #f0a500; color: #1a1a1a; }
+.btn-dark { background: #333; color: #fff; }
+.btn-outline { background: transparent; border: 1.5px solid #ccc; color: #444; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-danger { background: #fee2e2; color: #b91c1c; border: 1.5px solid #fca5a5; }
+
+.action-bar {
+  background: #fff;
+  padding: 12px 20px;
+  display: flex;
+  gap: 10px;
+  border-bottom: 1px solid #e5e5e0;
+  flex-wrap: wrap;
+}
+
+/* ── 스캐너 패널 ── */
+#scannerPanel {
+  display: none;
+  background: #1a1a1a;
+  padding: 16px 20px;
+}
+#scannerPanel.active { display: block; }
+#video {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #333;
+  display: block;
+}
+.scan-status {
+  color: #f0a500;
+  text-align: center;
+  padding: 10px 0 6px;
+  font-size: 13px;
+}
+.manual-bc {
+  display: none;
+  margin-top: 10px;
+  gap: 8px;
+}
+.manual-bc.show { display: flex; }
+.manual-bc input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #555;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 15px;
+  font-family: monospace;
+}
+.manual-bc input:focus { outline: none; border-color: #f0a500; }
+
+/* ── 폼 패널 ── */
+#formPanel {
+  display: none;
+  background: #fff;
+  border-bottom: 2px solid #f0a500;
+  padding: 16px 20px;
+}
+#formPanel.active { display: block; }
+#formPanel h2 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: #444; }
+.form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.form-group { flex: 1; min-width: 140px; }
+.form-group label { display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #fafafa;
+  transition: border-color 0.15s;
+}
+.form-group input:focus { outline: none; border-color: #f0a500; background: #fff; }
+.save-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+}
+.save-check input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: #f0a500; }
+.form-btns { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ── 아이템 목록 ── */
+.items-wrap { padding: 16px; }
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #aaa;
+}
+.empty .icon { font-size: 40px; margin-bottom: 12px; }
+.empty p { font-size: 14px; line-height: 1.8; }
+
+.item-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e5e0;
+  position: relative;
+}
+.item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.item-info {}
+.item-num {
+  font-size: 11px;
+  color: #aaa;
+  font-weight: 700;
+  margin-bottom: 2px;
+  letter-spacing: 0.5px;
+}
+.item-name { font-size: 17px; font-weight: 700; color: #1a1a1a; }
+.item-origin { font-size: 13px; color: #888; margin-top: 2px; }
+.item-barcode { font-size: 11px; color: #bbb; font-family: monospace; margin-top: 2px; }
+
+.item-fields { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.field-box {
+  flex: 1;
+  min-width: 120px;
+  background: #fafafa;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.field-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; }
+.weight-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: #1a1a1a;
+  padding: 0;
+}
+.weight-input:focus { outline: none; }
+.weight-unit { font-size: 12px; color: #aaa; margin-top: 2px; }
+
+.expiry-section {}
+.expiry-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.expiry-title { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; }
+.add-exp-btn {
+  font-size: 12px;
+  background: #fff8e8;
+  border: 1.5px solid #f0a500;
+  color: #c8880a;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.add-exp-btn:disabled { opacity: 0.4; cursor: default; }
+
+.expiry-list { display: flex; flex-direction: column; gap: 6px; }
+.expiry-row { display: flex; align-items: center; gap: 8px; }
+.expiry-tag {
+  font-size: 11px;
+  background: #f5f5f0;
+  color: #666;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.expiry-date-btn {
+  flex: 1;
+  padding: 9px 14px;
+  background: #f9f9f6;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 15px;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #1a1a1a;
+  transition: border-color 0.15s;
+}
+.expiry-date-btn.empty { color: #bbb; font-weight: 400; font-family: inherit; font-size: 14px; }
+.expiry-date-btn:hover { border-color: #f0a500; }
+.expiry-date-btn.active { border-color: #f0a500; background: #fff8e8; }
+.remove-exp-btn {
+  background: none;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── 날짜 피커 (인라인) ── */
+.date-picker-inline {
+  display: none;
+  background: #fff;
+  border: 1.5px solid #f0a500;
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 6px;
+}
+.date-picker-inline.show { display: block; }
+.picker-selects {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.picker-col { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+.picker-col label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; }
+.picker-select {
+  width: 100%;
+  padding: 10px 6px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 15px;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  color: #1a1a1a;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.picker-select:focus { outline: none; border-color: #f0a500; background: #fff8e8; }
+.picker-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ── DB 패널 ── */
+#dbPanel {
+  display: none;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e0;
+  padding: 16px 20px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+#dbPanel.active { display: block; }
+#dbPanel h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.db-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.db-table th { background: #f5f5f0; padding: 8px 10px; text-align: left; font-size: 11px; color: #888; font-weight: 700; text-transform: uppercase; }
+.db-table td { padding: 9px 10px; border-top: 1px solid #f0f0ec; }
+.db-table td:first-child { font-family: monospace; color: #888; font-size: 12px; }
+
+/* ── 알림 ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 9999;
+  animation: toastIn 0.25s ease;
+  white-space: nowrap;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.item-card-del {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ccc;
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px;
+}
+.item-card-del:hover { color: #f87171; }
+
+@media (max-width: 480px) {
+  .form-row { flex-direction: column; }
+  .item-fields { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 재고조사</h1>
+  <div class="header-btns">
+    <button class="btn btn-dark btn-sm" onclick="toggleDB()">매핑 DB</button>
+    <button class="btn btn-amber btn-sm" onclick="exportExcel()">엑셀 저장</button>
+  </div>
+</header>
+
+<!-- 스캐너 패널 -->
+<div id="scannerPanel">
+  <video id="video" autoplay playsinline muted></video>
+  <div class="scan-status" id="scanStatus">카메라 시작 중...</div>
+  <div class="manual-bc" id="manualBcRow">
+    <input type="text" id="manualBcInput" placeholder="바코드 번호 직접 입력" inputmode="numeric">
+    <button class="btn btn-amber" onclick="processManualBarcode()">확인</button>
+    <button class="btn btn-outline" onclick="closeScanner()">취소</button>
+  </div>
+</div>
+
+<!-- 폼 패널 -->
+<div id="formPanel">
+  <h2 id="formTitle">원료 추가</h2>
+  <div class="form-row">
+    <div class="form-group">
+      <label>품명</label>
+      <input type="text" id="fName" placeholder="예: 가당연유">
+    </div>
+    <div class="form-group">
+      <label>원산지</label>
+      <input type="text" id="fOrigin" placeholder="예: 국내제조">
+    </div>
+  </div>
+  <label class="save-check" id="saveCheckRow" style="display:none">
+    <input type="checkbox" id="saveCheck" checked>
+    매핑 DB에 저장 (다음번 자동입력)
+  </label>
+  <div class="form-btns">
+    <button class="btn btn-amber" onclick="submitForm()">추가</button>
+    <button class="btn btn-outline" onclick="closeForm()">취소</button>
+  </div>
+</div>
+
+<!-- DB 패널 -->
+<div id="dbPanel">
+  <h2>
+    <span>매핑 DB</span>
+    <button class="btn btn-outline btn-sm" onclick="toggleDB()">닫기</button>
+  </h2>
+  <table class="db-table">
+    <thead>
+      <tr><th>바코드</th><th>품명</th><th>원산지</th><th></th></tr>
+    </thead>
+    <tbody id="dbTbody"></tbody>
+  </table>
+</div>
+
+<!-- 액션바 -->
+<div class="action-bar">
+  <button class="btn btn-amber" onclick="openScanner()">📷 바코드 스캔</button>
+  <button class="btn btn-dark" onclick="openForm()">✏️ 수동 추가</button>
+</div>
+
+<!-- 아이템 목록 -->
+<div class="items-wrap">
+  <div class="empty" id="emptyMsg">
+    <div class="icon">📋</div>
+    <p>바코드를 스캔하거나<br>수동으로 원료를 추가해주세요</p>
+    <p style="margin-top:12px;font-size:12px;color:#bbb">샘플 바코드: 8801052800011 (버터)</p>
+  </div>
+  <div id="itemsList"></div>
+</div>
+
+<script>
+// ── 상태 ──
+let items = [];
+let nextId = 1;
+let pendingBarcode = null;
+let openPickerKey = null; // "itemId-expiryIdx"
+let videoStream = null;
+let scanTimer = null;
+
+// ── 매핑 DB ──
+const defaultDB = {
+  "8801052800011": { name: "버터", origin: "미국" },
+  "8801073130012": { name: "하얀설탕", origin: "국내제조" },
+  "8801097811018": { name: "우유", origin: "국산" },
+  "8801115523282": { name: "가당연유", origin: "국내제조" },
+  "8801073140028": { name: "흑설탕", origin: "국내제조" }
+};
+let mappingDB = JSON.parse(localStorage.getItem('inventoryDB') || 'null') || defaultDB;
+
+function saveDB() {
+  localStorage.setItem('inventoryDB', JSON.stringify(mappingDB));
+}
+
+// ── 스캐너 ──
+function openScanner() {
+  closeForm();
+  document.getElementById('scannerPanel').classList.add('active');
+  const status = document.getElementById('scanStatus');
+  const manualRow = document.getElementById('manualBcRow');
+
+  if (!('BarcodeDetector' in window)) {
+    status.textContent = '자동 스캔 미지원 — 바코드 번호를 직접 입력해주세요';
+    manualRow.classList.add('show');
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
+    .then(stream => {
+      videoStream = stream;
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      status.textContent = '바코드를 카메라에 비춰주세요...';
+
+      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e'] });
+      scanTimer = setInterval(async () => {
+        if (video.readyState < 2) return;
+        try {
+          const results = await detector.detect(video);
+          if (results.length > 0) {
+            stopCamera();
+            closeScanner();
+            processBarcode(results[0].rawValue);
+          }
+        } catch(e) {}
+      }, 400);
+    })
+    .catch(() => {
+      status.textContent = '카메라 접근 실패 — 번호를 직접 입력해주세요';
+      manualRow.classList.add('show');
+    });
+}
+
+function stopCamera() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+}
+
+function closeScanner() {
+  stopCamera();
+  document.getElementById('scannerPanel').classList.remove('active');
+  document.getElementById('manualBcRow').classList.remove('show');
+  document.getElementById('manualBcInput').value = '';
+  document.getElementById('scanStatus').textContent = '카메라 시작 중...';
+}
+
+function processManualBarcode() {
+  const val = document.getElementById('manualBcInput').value.trim();
+  if (!val) return;
+  closeScanner();
+  processBarcode(val);
+}
+
+function processBarcode(barcode) {
+  if (mappingDB[barcode]) {
+    const p = mappingDB[barcode];
+    addItem({ barcode, name: p.name, origin: p.origin });
+    toast('✅ ' + p.name + ' 추가됨');
+  } else {
+    pendingBarcode = barcode;
+    document.getElementById('formTitle').textContent = '원료 추가 (미등록 바코드: ' + barcode + ')';
+    document.getElementById('fName').value = '';
+    document.getElementById('fOrigin').value = '';
+    document.getElementById('saveCheckRow').style.display = 'flex';
+    document.getElementById('formPanel').classList.add('active');
+  }
+}
+
+// ── 폼 ──
+function openForm() {
+  closeScanner();
+  pendingBarcode = null;
+  document.getElementById('formTitle').textContent = '원료 수동 추가';
+  document.getElementById('fName').value = '';
+  document.getElementById('fOrigin').value = '';
+  document.getElementById('saveCheckRow').style.display = 'none';
+  document.getElementById('formPanel').classList.add('active');
+  setTimeout(() => document.getElementById('fName').focus(), 100);
+}
+
+function closeForm() {
+  document.getElementById('formPanel').classList.remove('active');
+  pendingBarcode = null;
+}
+
+function submitForm() {
+  const name = document.getElementById('fName').value.trim();
+  const origin = document.getElementById('fOrigin').value.trim();
+  if (!name) { alert('품명을 입력해주세요.'); return; }
+
+  if (pendingBarcode && document.getElementById('saveCheck').checked) {
+    mappingDB[pendingBarcode] = { name, origin };
+    saveDB();
+    toast('📌 매핑 DB에 저장됨');
+  }
+
+  addItem({ barcode: pendingBarcode, name, origin });
+  closeForm();
+}
+
+// ── 아이템 ──
+function addItem({ barcode, name, origin }) {
+  items.push({ id: nextId++, barcode: barcode || null, name, origin, weight: '', expiries: [null] });
+  render();
+}
+
+function removeItem(id) {
+  items = items.filter(i => i.id !== id);
+  render();
+}
+
+function updateWeight(id, val) {
+  const item = items.find(i => i.id === id);
+  if (item) item.weight = val;
+}
+
+function addExpiry(id) {
+  const item = items.find(i => i.id === id);
+  if (item && item.expiries.length < 3) { item.expiries.push(null); render(); }
+}
+
+function removeExpiry(id, idx) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.expiries.splice(idx, 1);
+  if (openPickerKey === id + '-' + idx) openPickerKey = null;
+  render();
+}
+
+// ── 날짜 피커 ──
+function togglePicker(id, idx) {
+  const key = id + '-' + idx;
+  openPickerKey = (openPickerKey === key) ? null : key;
+  render();
+  if (openPickerKey) {
+    setTimeout(() => {
+      const el = document.getElementById('picker-' + key);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+  }
+}
+
+function confirmDate(id, idx) {
+  const key = id + '-' + idx;
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.expiries[idx] = {
+    year:  parseInt(document.getElementById('py-' + key).value),
+    month: parseInt(document.getElementById('pm-' + key).value),
+    day:   parseInt(document.getElementById('pd-' + key).value)
+  };
+  openPickerKey = null;
+  render();
+}
+
+function cancelDate() {
+  openPickerKey = null;
+  render();
+}
+
+// ── 렌더 ──
+function render() {
+  const empty = document.getElementById('emptyMsg');
+  const list  = document.getElementById('itemsList');
+
+  if (items.length === 0) {
+    empty.style.display = 'block';
+    list.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const curD = now.getDate();
+
+  list.innerHTML = items.map((item, idx) => {
+    const expiryHtml = item.expiries.map((exp, ei) => {
+      const key = item.id + '-' + ei;
+      const isOpen = openPickerKey === key;
+      const dateText = exp
+        ? `${exp.year}-${String(exp.month).padStart(2,'0')}-${String(exp.day).padStart(2,'0')}`
+        : null;
+
+      const yearOpts = Array.from({length: 12}, (_,i) => {
+        const y = curY - 1 + i;
+        const sel = (exp?.year === y || (!exp && y === curY)) ? ' selected' : '';
+        return `<option value="${y}"${sel}>${y}년</option>`;
+      }).join('');
+      const monthOpts = Array.from({length: 12}, (_,i) => {
+        const m = i + 1;
+        const sel = (exp?.month === m || (!exp && m === curM)) ? ' selected' : '';
+        return `<option value="${m}"${sel}>${String(m).padStart(2,'0')}월</option>`;
+      }).join('');
+      const dayOpts = Array.from({length: 31}, (_,i) => {
+        const d = i + 1;
+        const sel = (exp?.day === d || (!exp && d === curD)) ? ' selected' : '';
+        return `<option value="${d}"${sel}>${String(d).padStart(2,'0')}일</option>`;
+      }).join('');
+
+      return `
+        <div class="expiry-row">
+          <span class="expiry-tag">기한 ${ei+1}</span>
+          <button class="expiry-date-btn ${dateText ? '' : 'empty'} ${isOpen ? 'active' : ''}"
+            onclick="togglePicker(${item.id}, ${ei})">
+            ${dateText || '날짜 선택'}
+          </button>
+          ${ei > 0 ? `<button class="remove-exp-btn" onclick="removeExpiry(${item.id}, ${ei})">×</button>` : ''}
+        </div>
+        <div class="date-picker-inline ${isOpen ? 'show' : ''}" id="picker-${key}">
+          <div class="picker-selects">
+            <div class="picker-col">
+              <label>년도</label>
+              <select class="picker-select" id="py-${key}">${yearOpts}</select>
+            </div>
+            <div class="picker-col">
+              <label>월</label>
+              <select class="picker-select" id="pm-${key}">${monthOpts}</select>
+            </div>
+            <div class="picker-col">
+              <label>일</label>
+              <select class="picker-select" id="pd-${key}">${dayOpts}</select>
+            </div>
+          </div>
+          <div class="picker-btns">
+            <button class="btn btn-outline btn-sm" onclick="cancelDate()">취소</button>
+            <button class="btn btn-amber btn-sm" onclick="confirmDate(${item.id}, ${ei})">확인</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="item-card">
+        <button class="item-card-del" onclick="removeItem(${item.id})">×</button>
+        <div class="item-header">
+          <div class="item-info">
+            <div class="item-num">NO. ${String(idx+1).padStart(2,'0')}</div>
+            <div class="item-name">${item.name}</div>
+            <div class="item-origin">${item.origin || '-'}</div>
+            ${item.barcode ? `<div class="item-barcode">${item.barcode}</div>` : ''}
+          </div>
+        </div>
+        <div class="item-fields">
+          <div class="field-box">
+            <div class="field-label">중량</div>
+            <input class="weight-input" type="number" step="0.001" min="0"
+              value="${item.weight}" placeholder="0.000"
+              onchange="updateWeight(${item.id}, this.value)"
+              oninput="updateWeight(${item.id}, this.value)">
+            <div class="weight-unit">kg</div>
+          </div>
+        </div>
+        <div class="expiry-section">
+          <div class="expiry-label-row">
+            <span class="expiry-title">소비기한</span>
+            <button class="add-exp-btn" onclick="addExpiry(${item.id})"
+              ${item.expiries.length >= 3 ? 'disabled' : ''}>
+              + 추가
+            </button>
+          </div>
+          <div class="expiry-list">${expiryHtml}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── DB 관리 ──
+function toggleDB() {
+  const panel = document.getElementById('dbPanel');
+  if (panel.classList.toggle('active')) {
+    renderDB();
+  }
+}
+
+function renderDB() {
+  const tbody = document.getElementById('dbTbody');
+  const entries = Object.entries(mappingDB);
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px">등록된 항목 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([bc, d]) => `
+    <tr>
+      <td>${bc}</td>
+      <td style="font-weight:600">${d.name}</td>
+      <td style="color:#888">${d.origin || '-'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteDB('${bc}')">삭제</button></td>
+    </tr>`).join('');
+}
+
+function deleteDB(bc) {
+  if (!confirm(mappingDB[bc]?.name + '을(를) 삭제할까요?')) return;
+  delete mappingDB[bc];
+  saveDB();
+  renderDB();
+}
+
+// ── 엑셀 ──
+function exportExcel() {
+  const today = new Date();
+  const ds = today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+
+  const rows = items.map((item, i) => {
+    const row = {
+      'No.': i + 1,
+      '품명': item.name,
+      '원산지': item.origin || '',
+      '중량(kg)': item.weight !== '' ? parseFloat(parseFloat(item.weight).toFixed(3)) : ''
+    };
+    for (let k = 0; k < 3; k++) {
+      const exp = item.expiries[k];
+      row['소비기한' + (k+1)] = exp
+        ? `${exp.year}-${String(exp.month).padStart(2,'0')}-${String(exp.day).padStart(2,'0')}`
+        : '';
+    }
+    return row;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:5},{wch:22},{wch:15},{wch:12},{wch:14},{wch:14},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '재고조사');
+  XLSX.writeFile(wb, '재고조사_' + ds + '.xlsx');
+  toast('📥 엑셀 저장 완료');
+}
+
+// ── 알림 ──
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+render();
+</script>
+</body>
+</html>
