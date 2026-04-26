@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<!-- saved from url=(0093)file:///C:/Users/user/Downloads/%EC%9E%85%EA%B3%A0%EA%B2%80%EC%82%AC%EC%9D%BC%EC%A7%80_2.html -->
+<!-- saved from url=(0093)file:///C:/Users/user/Downloads/%EC%9E%85%EA%B3%A0%EA%B2%80%EC%82%AC%EC%9D%BC%EC%A7%80_3.html -->
 <html lang="ko"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>원부재료 입고 검사 일지</title>
 <script src="./원부재료 입고 검사 일지_files/xlsx.full.min.js.다운로드"></script>
 <script src="./원부재료 입고 검사 일지_files/jspdf.umd.min.js.다운로드"></script>
+<script src="./원부재료 입고 검사 일지_files/html2canvas.min.js.다운로드"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f0f0eb; color: #1a1a1a; font-size: 15px; }
@@ -326,7 +327,7 @@ canvas#signCanvas {
   <h1>📋 입고 검사 일지</h1>
   <div class="header-btns">
     <button class="btn btn-dark btn-sm" onclick="openSignPanel()">서명</button>
-    <button class="btn btn-amber btn-sm" onclick="exportPDF()">PDF</button>
+    <button class="btn btn-amber btn-sm" onclick="exportExcel()">엑셀 저장</button>
   </div>
 </header>
 
@@ -524,7 +525,7 @@ canvas#signCanvas {
 <!-- 이미지 모달 -->
 <div id="imgModal" onclick="closeImgModal()">
   <span class="close">×</span>
-  <img id="modalImg" src="file:///C:/Users/user/Downloads/%EC%9E%85%EA%B3%A0%EA%B2%80%EC%82%AC%EC%9D%BC%EC%A7%80_2.html">
+  <img id="modalImg" src="file:///C:/Users/user/Downloads/%EC%9E%85%EA%B3%A0%EA%B2%80%EC%82%AC%EC%9D%BC%EC%A7%80_3.html">
 </div>
 
 <script>
@@ -886,134 +887,183 @@ function openImgModal(src) {
 }
 function closeImgModal() { document.getElementById('imgModal').classList.remove('active'); }
 
-// ── PDF 출력 ──
-function exportPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+// ── 엑셀 저장 ──
+function exportExcel() {
+  const inDate = document.getElementById('inDate').value;
+  const inspector = document.getElementById('inspector').value || '이광훈';
 
+  const rows = items.map((item, i) => ({
+    'No.': i + 1,
+    '입고일자': inDate,
+    '입고검사자': inspector,
+    '거래처': item.company || '',
+    '품명': item.name || '',
+    '입고량(kg)': item.qty !== '' ? parseFloat(parseFloat(item.qty).toFixed(3)) : '',
+    '소비기한1': item.expiries[0] ? `${item.expiries[0].year}-${String(item.expiries[0].month).padStart(2,'0')}-${String(item.expiries[0].day).padStart(2,'0')}` : '',
+    '소비기한2': item.expiries[1] ? `${item.expiries[1].year}-${String(item.expiries[1].month).padStart(2,'0')}-${String(item.expiries[1].day).padStart(2,'0')}` : '',
+    '소비기한3': item.expiries[2] ? `${item.expiries[2].year}-${String(item.expiries[2].month).padStart(2,'0')}-${String(item.expiries[2].day).padStart(2,'0')}` : '',
+    '성상': item.checks.ss || '',
+    '표시사항': item.checks.lb || '',
+    '포장상태': item.checks.pk || '',
+    '차량위생': item.checks.cr || '',
+    '성적서': item.checks.ct || '',
+    '제품온도(℃)': item.temp || '',
+    '타코메타기록지': item.docs.taco ? '■' : '',
+    '시험성적서': item.docs.cert ? '■' : '',
+    '수입면장': item.docs.imp ? '■' : '',
+    '구분유통증명서': item.docs.dist ? '■' : '',
+    '원산지증명원': item.docs.ori ? '■' : '',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    {wch:5},{wch:12},{wch:10},{wch:12},{wch:18},{wch:10},
+    {wch:12},{wch:12},{wch:12},
+    {wch:6},{wch:8},{wch:8},{wch:8},{wch:8},
+    {wch:10},{wch:12},{wch:10},{wch:8},{wch:12},{wch:10}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '입고검사일지');
+  const ds = inDate.replace(/-/g,'');
+  XLSX.writeFile(wb, '입고검사일지_' + ds + '.xlsx');
+  toast('📥 엑셀 저장 완료');
+}
+
+// ── PDF 출력 (html2canvas 방식 - 한글 완벽 지원) ──
+function exportPDF() {
   const inDate = document.getElementById('inDate').value;
   const inspector = document.getElementById('inspector').value || '-';
 
-  // 폰트 설정 (기본 폰트 사용)
-  doc.setFont('helvetica');
+  // 인쇄용 HTML 생성
+  const printDiv = document.createElement('div');
+  printDiv.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:30px;font-family:Malgun Gothic,Apple SD Gothic Neo,sans-serif;font-size:12px;color:#1a1a1a;';
 
-  // 제목
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('원부재료 입고 검사 일지', 105, 20, { align: 'center' });
+  const checkLabels = { ss:'성상', lb:'표시사항', pk:'포장상태', cr:'차량위생', ct:'성적서' };
+  const docLabels = { taco:'타코메타기록지', cert:'시험성적서', imp:'수입면장', dist:'구분유통증명', ori:'원산지증명' };
 
-  // 기본정보
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('입고일자: ' + inDate, 20, 32);
-  doc.text('입고검사자: ' + inspector, 120, 32);
-
-  // 구분선
-  doc.setLineWidth(0.5);
-  doc.line(15, 36, 195, 36);
-
-  // 테이블 헤더
-  let y = 42;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setFillColor(240, 240, 235);
-  doc.rect(15, y-4, 180, 8, 'F');
-  doc.text('거래처', 17, y);
-  doc.text('품명', 45, y);
-  doc.text('입고량', 85, y);
-  doc.text('소비기한', 105, y);
-  doc.text('성상', 135, y);
-  doc.text('표시', 143, y);
-  doc.text('포장', 151, y);
-  doc.text('차량', 159, y);
-  doc.text('성적서', 167, y);
-  doc.text('온도', 180, y);
-
-  doc.line(15, y+2, 195, y+2);
-  y += 8;
-
-  // 품목 목록
-  doc.setFont('helvetica', 'normal');
-  const checkLabels = { ss:'성상', lb:'표시', pk:'포장', cr:'차량', ct:'성적서' };
-
-  items.forEach((item, idx) => {
-    if (y > 240) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.setFontSize(8);
+  let rows = items.map((item, i) => {
     const expText = item.expiries.filter(Boolean).map(e =>
       `${e.year}-${String(e.month).padStart(2,'0')}-${String(e.day).padStart(2,'0')}`
-    ).join(', ');
+    ).join('<br>');
 
-    doc.text((item.company||'-').substring(0,8), 17, y);
-    doc.text((item.name||'-').substring(0,12), 45, y);
-    doc.text((item.qty||'-')+'kg', 85, y);
-    doc.text(expText.substring(0,20)||'-', 105, y);
-    doc.text(item.checks.ss||'-', 136, y);
-    doc.text(item.checks.lb||'-', 144, y);
-    doc.text(item.checks.pk||'-', 152, y);
-    doc.text(item.checks.cr||'-', 160, y);
-    doc.text(item.checks.ct||'-', 168, y);
-    doc.text((item.temp||'-')+'℃', 180, y);
+    const checks = Object.entries(checkLabels).map(([k,l]) =>
+      `<td style="border:1px solid #ccc;padding:6px 4px;text-align:center;font-size:11px;">
+        <div style="font-size:9px;color:#888;">${l}</div>
+        <div style="font-weight:700;color:${item.checks[k]==='O'?'#065f46':item.checks[k]==='X'?'#b91c1c':'#bbb'}">${item.checks[k]||'-'}</div>
+      </td>`
+    ).join('');
 
-    doc.setDrawColor(220,220,215);
-    doc.line(15, y+2, 195, y+2);
-    y += 8;
-  });
+    const docs = Object.entries(docLabels).filter(([k])=>item.docs[k]).map(([k,l])=>
+      `<span style="background:#d1fae5;color:#065f46;padding:2px 6px;border-radius:4px;font-size:10px;margin:2px;display:inline-block;">✓${l}</span>`
+    ).join('');
 
-  y += 10;
+    return `<tr style="background:${i%2===0?'#fff':'#fafaf8'}">
+      <td style="border:1px solid #ccc;padding:6px 8px;">${item.company||'-'}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-weight:600;">${item.name||'-'}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;">${item.qty||'-'} kg</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-family:monospace;font-size:11px;">${expText||'-'}</td>
+      ${checks}
+      <td style="border:1px solid #ccc;padding:6px 8px;text-align:center;">${item.temp?item.temp+'℃':'-'}</td>
+    </tr>
+    ${docs ? `<tr><td colspan="10" style="border:1px solid #ccc;padding:4px 8px;background:#f9fff9;">${docs}</td></tr>` : ''}`;
+  }).join('');
 
   // 온도기록지 사진
+  let photoSection = '';
   const photoItems = items.filter(i => i.photo);
   if (photoItems.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('온도기록지', 15, y);
-    y += 6;
-
-    photoItems.forEach(item => {
-      if (y > 220) { doc.addPage(); y = 20; }
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(item.name + ' (' + (item.company||'-') + ')', 15, y);
-      y += 4;
-      try {
-        doc.addImage(item.photo, 'JPEG', 15, y, 80, 50);
-        y += 56;
-      } catch(e) { y += 4; }
-    });
+    const photos = photoItems.map(item =>
+      `<div style="margin:8px 0;">
+        <div style="font-size:11px;color:#666;margin-bottom:4px;">${item.name} (${item.company||'-'})</div>
+        <img src="${item.photo}" style="max-width:300px;max-height:200px;border-radius:6px;border:1px solid #eee;">
+      </div>`
+    ).join('');
+    photoSection = `
+      <div style="margin-top:20px;border-top:1px solid #ddd;padding-top:16px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;">온도기록지</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;">${photos}</div>
+      </div>`;
   }
 
   // 서명
-  y += 6;
-  if (y > 250) { doc.addPage(); y = 20; }
-  doc.setLineWidth(0.5);
-  doc.line(15, y, 195, y);
-  y += 8;
+  const writeSign = signs.write ? `<img src="${signs.write}" style="height:50px;display:block;margin-top:6px;background:#1a1a1a;border-radius:4px;">` : '<div style="height:50px;border-bottom:1px solid #ccc;margin-top:6px;"></div>';
+  const approveSign = signs.approve ? `<img src="${signs.approve}" style="height:50px;display:block;margin-top:6px;background:#1a1a1a;border-radius:4px;">` : '<div style="height:50px;border-bottom:1px solid #ccc;margin-top:6px;"></div>';
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('결재', 15, y);
-  y += 6;
+  printDiv.innerHTML = `
+    <div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:16px;">원부재료 입고 검사 일지</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px;">
+      <span>입고일자: <strong>${inDate}</strong></span>
+      <span>입고검사자: <strong>${inspector}</strong></span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead>
+        <tr style="background:#f0f0eb;">
+          <th style="border:1px solid #ccc;padding:8px;text-align:left;">거래처</th>
+          <th style="border:1px solid #ccc;padding:8px;text-align:left;">품명</th>
+          <th style="border:1px solid #ccc;padding:8px;">입고량</th>
+          <th style="border:1px solid #ccc;padding:8px;">소비기한</th>
+          <th style="border:1px solid #ccc;padding:8px;">성상</th>
+          <th style="border:1px solid #ccc;padding:8px;">표시사항</th>
+          <th style="border:1px solid #ccc;padding:8px;">포장상태</th>
+          <th style="border:1px solid #ccc;padding:8px;">차량위생</th>
+          <th style="border:1px solid #ccc;padding:8px;">성적서</th>
+          <th style="border:1px solid #ccc;padding:8px;">온도</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${photoSection}
+    <div style="margin-top:24px;border-top:1px solid #ddd;padding-top:16px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px;">결재</div>
+      <div style="display:flex;gap:40px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:12px;color:#888;">작성자</div>
+          ${writeSign}
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:12px;color:#888;">승인자</div>
+          ${approveSign}
+        </div>
+        <div style="flex:2;"></div>
+      </div>
+    </div>`;
 
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('작성자', 30, y);
-  doc.text('승인자', 120, y);
-  y += 4;
+  document.body.appendChild(printDiv);
+  toast('📄 PDF 생성 중...');
 
-  if (signs.write) {
-    try { doc.addImage(signs.write, 'PNG', 15, y, 50, 20); } catch(e) {}
-  }
-  if (signs.approve) {
-    try { doc.addImage(signs.approve, 'PNG', 105, y, 50, 20); } catch(e) {}
-  }
+  html2canvas(printDiv, { scale: 2, useCORS: true, backgroundColor: '#fff' }).then(canvas => {
+    document.body.removeChild(printDiv);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pageW = 210, pageH = 297;
+    const imgW = pageW - 20;
+    const imgH = canvas.height * imgW / canvas.width;
 
-  const ds = inDate.replace(/-/g,'');
-  doc.save('입고검사일지_' + ds + '.pdf');
-  toast('📥 PDF 저장 완료');
+    let y = 10;
+    let remainH = imgH;
+    let srcY = 0;
+
+    while (remainH > 0) {
+      const sliceH = Math.min(remainH, pageH - 20);
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceH * canvas.width / imgW;
+      const ctx2 = sliceCanvas.getContext('2d');
+      ctx2.drawImage(canvas, 0, srcY * canvas.width / imgW, canvas.width, sliceCanvas.height, 0, 0, sliceCanvas.width, sliceCanvas.height);
+      pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, y, imgW, sliceH);
+      remainH -= sliceH;
+      srcY += sliceH;
+      if (remainH > 0) { pdf.addPage(); y = 10; }
+    }
+
+    const ds = inDate.replace(/-/g,'');
+    pdf.save('입고검사일지_' + ds + '.pdf');
+    toast('📥 PDF 저장 완료');
+  }).catch(e => {
+    document.body.removeChild(printDiv);
+    toast('❌ PDF 생성 실패');
+  });
 }
 
 // ── 알림 ──
